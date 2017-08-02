@@ -111,20 +111,20 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
            0,0,0,1,0,
            0,0,0,0,1;
     // TIME??????
-    previous_timestamp_ = meas_package.timestamp_;
+    time_us_ = meas_package.timestamp_;
     is_initialized_ = true;
     return;
   }
   
-  double delta_t = meas_package.timestamp_ - previous_timestamp_/1000000.0;
-  previous_timestamp_  = meas_package.timestamp_;
+  double delta_t = (meas_package.timestamp_ - time_us_)/1000000.0;
+  time_us_ = meas_package.timestamp_;
   Prediction(delta_t);
   
-  if (meas_package.sensor_type_ == MeasurementPackage::RADAR)
+  if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_)
   {
     UpdateRadar(meas_package);
   }
-  else
+  else if (use_laser_)
   {
     UpdateLidar(meas_package);
   }
@@ -269,6 +269,46 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     Zsig.col(i) << px, py;
   }
   
+  //mean predicted measurement
+  VectorXd z_pred = VectorXd(n_z);
+  
+  //calculate mean predicted measurement
+  for (int i=0; i<n_sig_; ++i)
+  {
+    z_pred += weights_(i)*Zsig.col(i);
+  }
+  
+  //calculate measurement covariance matrix S
+  MatrixXd R = MatrixXd(n_z, n_z);
+  
+  R <<  std_laspx_*std_laspx_,0,
+        0,std_laspy_*std_laspy_;
+  
+  //measurement covariance matrix S
+  MatrixXd S = MatrixXd(n_z,n_z);
+  
+  for (int i=0; i<n_sig_; ++i)
+  {
+    S += weights_(i)*(Zsig.col(i) - z_pred)*(Zsig.col(i) - z_pred).transpose();
+  }
+  S += R;
+  
+  //create matrix for cross correlation Tc
+  MatrixXd Tc = MatrixXd(n_x_, n_z);
+  
+  //calculate cross correlation matrix
+  for(int i=0; i<n_sig_; ++i)
+  {
+    Tc += weights_(i)*(Xsig_pred_.col(i)-x_)*(Zsig.col(i)-z_pred).transpose();
+  }
+  
+  //calculate Kalman gain K;
+  MatrixXd K = Tc * S.inverse();
+  
+  //update state mean and covariance matrix
+  x_ = x_ + K*(meas_package.raw_measurements_-z_pred);
+  P_ = P_-K*S*K.transpose();
+  
 }
 
 /**
@@ -301,29 +341,14 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     double yawd = Xsig_pred_(4,i);
     
     double rho = sqrt(px*px + py*py);
-    double phi = atan(py/px);
+    double phi = atan2(py,px);
     double rhod = (px*cos(yaw)*v + py*sin(yaw)*v) / rho;
     
     Zsig.col(i) << rho, phi, rhod;
   }
-  PredictMeasurement(Zsig, meas_package);
-  
-  return;
-}
-
-void UKF::PredictMeasurement(MatrixXd Zsig, MeasurementPackage meas_package)
-{
-  // Measurement dimension
-  int n_z = 3;
   
   //mean predicted measurement
   VectorXd z_pred = VectorXd(n_z);
-  
-  //measurement covariance matrix S
-  MatrixXd S = MatrixXd(n_z,n_z);
-  
-  //create matrix for cross correlation Tc
-  MatrixXd Tc = MatrixXd(n_x_, n_z);
   
   //calculate mean predicted measurement
   for (int i=0; i<n_sig_; ++i)
@@ -333,15 +358,22 @@ void UKF::PredictMeasurement(MatrixXd Zsig, MeasurementPackage meas_package)
   
   //calculate measurement covariance matrix S
   MatrixXd R = MatrixXd(n_z, n_z);
+  
   R <<  std_radr_*std_radr_,0,0,
         0,std_radphi_*std_radphi_,0,
         0,0,std_radrd_*std_radrd_;
+  
+  //measurement covariance matrix S
+  MatrixXd S = MatrixXd(n_z,n_z);
   
   for (int i=0; i<n_sig_; ++i)
   {
     S += weights_(i)*(Zsig.col(i) - z_pred)*(Zsig.col(i) - z_pred).transpose();
   }
   S += R;
+  
+  //create matrix for cross correlation Tc
+  MatrixXd Tc = MatrixXd(n_x_, n_z);
   
   //calculate cross correlation matrix
   for(int i=0; i<n_sig_; ++i)
@@ -358,3 +390,24 @@ void UKF::PredictMeasurement(MatrixXd Zsig, MeasurementPackage meas_package)
   
   return;
 }
+
+//void UKF::UKFUpdate(MatrixXd S, MatrixXd Zsig, MatrixXd z_pred, MeasurementPackage meas_package)
+//{
+//  //create matrix for cross correlation Tc
+//  MatrixXd Tc = MatrixXd(n_x_, n_z);
+//  
+//  //calculate cross correlation matrix
+//  for(int i=0; i<n_sig_; ++i)
+//  {
+//    Tc += weights_(i)*(Xsig_pred_.col(i)-x_)*(Zsig.col(i)-z_pred).transpose();
+//  }
+//  
+//  //calculate Kalman gain K;
+//  MatrixXd K = Tc * S.inverse();
+//  
+//  //update state mean and covariance matrix
+//  x_ = x_ + K*(meas_package.raw_measurements_-z_pred);
+//  P_ = P_-K*S*K.transpose();
+//  
+//  return;
+//}

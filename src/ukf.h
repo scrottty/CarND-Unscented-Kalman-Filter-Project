@@ -69,10 +69,6 @@ public:
 
   ///* Sigma point spreading parameter
   double lambda_;
-  
-  ///* timestamp
-  long long previous_timestamp_;
-
 
   /**
    * Constructor
@@ -119,7 +115,7 @@ public:
   void PredictMeanAndCovariance();
   
   // Measurement Prediction
-  void PredictMeasurement(MatrixXd Zsig, MeasurementPackage meas_package);
+  void UKFUpdate(MatrixXd Zsig, MeasurementPackage meas_package);
 };
 
 #endif /* UKF_H */
