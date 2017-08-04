@@ -342,17 +342,19 @@ void UKF::PredictMeanAndCovariance()
   P_.fill(0.0);
   for(int i=0; i<n_sig_; ++i)
   {
+    // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
-    while(x_diff(3)>M_PI)
+    //angle normalization
+    while (x_diff(3)> M_PI)
     {
       x_diff(3) -= 2.*M_PI;
     }
-    while(x_diff(3) <-M_PI)
+    while (x_diff(3)<-M_PI)
     {
       x_diff(3) += 2.*M_PI;
     }
     
-    P_ = P_ + weights_(i)*x_diff*x_diff.transpose();
+    P_ = P_ + weights_(i) * x_diff * x_diff.transpose() ;
   }
   
 #ifdef testingMeanPred
@@ -403,6 +405,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   
   //mean predicted measurement
   VectorXd z_pred = VectorXd(n_z);
+  z_pred.fill(0.0);
   
   //calculate mean predicted measurement
   for (int i=0; i<n_sig_; ++i)
@@ -412,21 +415,36 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   
   //calculate measurement covariance matrix S
   MatrixXd R = MatrixXd(n_z, n_z);
-  
   R <<  std_laspx_*std_laspx_,0,
         0,std_laspy_*std_laspy_;
   
   //measurement covariance matrix S
   MatrixXd S = MatrixXd(n_z,n_z);
+  S.fill(0.0);
   
   for (int i=0; i<n_sig_; ++i)
   {
-    S += weights_(i)*(Zsig.col(i) - z_pred)*(Zsig.col(i) - z_pred).transpose();
+    //residual
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+    
+    //angle normalization
+    while (z_diff(1)> M_PI)
+    {
+      z_diff(1)-=2.*M_PI;
+    }
+    while (z_diff(1)< -M_PI)
+    {
+      z_diff(1)+=2.*M_PI;
+    }
+    
+    S = S + weights_(i) * z_diff * z_diff.transpose();
+    //S += weights_(i)*(Zsig.col(i) - z_pred)*(Zsig.col(i) - z_pred).transpose();
   }
   S += R;
   
   //create matrix for cross correlation Tc
   MatrixXd Tc = MatrixXd(n_x_, n_z);
+  Tc.fill(0.0);
   
   //calculate cross correlation matrix
   for(int i=0; i<n_sig_; ++i)
@@ -662,7 +680,32 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   //calculate cross correlation matrix
   for(int i=0; i<n_sig_; ++i)
   {
-    Tc += weights_(i)*(Xsig_pred_.col(i)-x_)*(Zsig.col(i)-z_pred).transpose();
+    //residual
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+    //angle normalization
+    while (z_diff(1)> M_PI)
+    {
+      z_diff(1) -= 2.*M_PI;
+    }
+    while (z_diff(1)<-M_PI)
+    {
+      z_diff(1)+=2.*M_PI;
+    }
+    
+    // state difference
+    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+    //angle normalization
+    while (x_diff(3)> M_PI)
+    {
+      x_diff(3)-=2.*M_PI;
+    }
+    while (x_diff(3)<-M_PI)
+    {
+      x_diff(3)+=2.*M_PI;
+    }
+    
+    Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
+    //Tc += weights_(i)*(Xsig_pred_.col(i)-x_)*(Zsig.col(i)-z_pred).transpose();
   }
   
   //calculate Kalman gain K;
