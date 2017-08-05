@@ -46,3 +46,10 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
   //return the result
   return rmse;
 }
+
+double Tools::CalcNIS(VectorXd z_pred, VectorXd z, MatrixXd S)
+{
+  VectorXd zDiff = z - z_pred;
+  
+  return zDiff.transpose() * S.inverse() * zDiff;
+}
